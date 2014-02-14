@@ -81,7 +81,7 @@ compile() {
 }
 
 copy-dir() {
-    rm -rf $2
+    rm -rf $2 2>/dev/null || rm -rf $2/* $2/.[!.]*
     mkdir -p $2
     [[ ! -d $1 ]] || cp -a $1/. $2 || exit
 }

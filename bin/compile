@@ -19,9 +19,9 @@ main() {
     declare bpd
 
     announce "Saving pristine dirs"
-    move-dir $APP_DIR $TMP_DIR/pristine/app
-    move-dir $BUILD_DIR $TMP_DIR/pristine/build
-    move-dir $CACHE_DIR $TMP_DIR/pristine/cache
+    copy-dir $APP_DIR $TMP_DIR/pristine/app
+    copy-dir $BUILD_DIR $TMP_DIR/pristine/build
+    copy-dir $CACHE_DIR $TMP_DIR/pristine/cache
 
     for bpu in $BUILDPACK_URLS; do
         bpd=$(url-dir $bpu)
@@ -45,15 +45,15 @@ main() {
         copy-dir $TMP_DIR/pristine/build $BUILD_DIR
 
         announce "Restoring cache for $bpd"
-        move-dir $TMP_DIR/$bpd/cache $CACHE_DIR
+        copy-dir $TMP_DIR/$bpd/cache $CACHE_DIR
 
         announce "Compiling $bpd"
         compile $bpd
 
         announce "Storing built $bpd"
-        move-dir $APP_DIR $TMP_DIR/$bpd/app
-        move-dir $BUILD_DIR $TMP_DIR/$bpd/build
-        move-dir $CACHE_DIR $TMP_DIR/$bpd/cache
+        copy-dir $APP_DIR $TMP_DIR/$bpd/app
+        copy-dir $BUILD_DIR $TMP_DIR/$bpd/build
+        copy-dir $CACHE_DIR $TMP_DIR/$bpd/cache
     done
 
     announce "Cleaning app dir"
@@ -64,7 +64,7 @@ main() {
 
         if [[ -d $TMP_DIR/$bpd/app ]]; then
             announce "Restoring app dir for $bpd"
-            move-dir $TMP_DIR/$bpd/app $APP_DIR keep
+            copy-dir $TMP_DIR/$bpd/app $APP_DIR keep
         fi
     done
 }
@@ -83,13 +83,6 @@ copy-dir() {
     [[ $3 == keep ]] || kill-dir $2
     mkdir -p $2
     [[ ! -d $1 ]] || cp -a $1/. $2 || exit
-}
-
-move-dir() {
-    [[ $3 == keep ]] || kill-dir $2
-    mkdir -p $2
-    [[ ! -d $1 ]] || mv $1/* $1/.[!.]* $2 2>/dev/null || cp -a $1/. $2 || exit
-    kill-dir $1
 }
 
 kill-dir() {

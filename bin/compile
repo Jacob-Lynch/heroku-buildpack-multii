@@ -88,7 +88,7 @@ copy-dir() {
 move-dir() {
     [[ $3 == keep ]] || kill-dir $2
     mkdir -p $2
-    [[ ! -d $1 ]] || cp -al $1/. $2 || exit
+    [[ ! -d $1 ]] || mv $1/* $1/.[!.]* $2 2>/dev/null || cp -a $1/. $2 || exit
     kill-dir $1
 }
 

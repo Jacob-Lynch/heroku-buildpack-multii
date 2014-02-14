@@ -35,11 +35,11 @@ main() {
 
         announce "Detecting $bpd"
         if ! detect $bpd; then
-            announce "Not detected $bpd"
+            announce "... NO"
             continue
         fi
 
-        announce "Detected $bpd"
+        announce "... YES"
         announce "Restoring pristine dirs"
         copy-dir $TMP_DIR/pristine/app $APP_DIR
         copy-dir $TMP_DIR/pristine/build $BUILD_DIR
@@ -88,8 +88,7 @@ copy-dir() {
 
 clone() {
     declare bpu=$1 bpd=$2
-    announce Cloning $bpu
-    mkdir -p $TMP_DIR/$bpd/buildpack
+    mkdir -p $TMP_DIR/$bpd
     git clone --depth=1 $bpu $TMP_DIR/$bpd/buildpack || exit
     rm -rf $TMP_DIR/$bpd/buildpack/.git
 }
@@ -99,7 +98,7 @@ url-dir() {
 }
 
 announce() {
-    echo "======> $*" >&2
+    echo "=====> $*" >&2
 }
 
 [[ ${0##*/} != compile ]] || main "$@"

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+APP_DIR=/app
+TMP_DIR=/tmp/multi
+
+if [[ -z $BUILDPACK_URLS ]]; then
+    BUILDPACK_URLS="
+    https://github.com/heroku/heroku-buildpack-ruby
+    https://github.com/heroku/heroku-buildpack-nodejs
+    https://github.com/heroku/heroku-buildpack-clojure
+    https://github.com/heroku/heroku-buildpack-python
+    "
+fi
+
+main() {
+    declare bpd
+
+    announce "Saving pristine dirs"
+    copy-dir $APP_DIR $TMP_DIR/pristine/app
+    copy-dir $BUILD_DIR $TMP_DIR/pristine/build
+    copy-dir $CACHE_DIR $TMP_DIR/pristine/cache
+
+    for bpu in $BUILDPACK_URLS; do
+        bpd=$(url-dir $bpu)
+
+        announce "Cloning $bpu"
+        clone $bpu $bpd
+    done
+
+    for bpu in $BUILDPACK_URLS; do
+        bpd=$(url-dir $bpu)
+
+        announce "Detecting $bpd"
+        if ! detect $bpd; then
+            announce "Not detected $bpd"
+            continue
+        fi
+
+        announce "Detected $bpd"
+        announce "Restoring pristine dirs"
+        copy-dir $TMP_DIR/pristine/app $APP_DIR
+        copy-dir $TMP_DIR/pristine/build $BUILD_DIR
+
+        announce "Restoring cache for $bpd"
+        copy-dir $TMP_DIR/$bpd/cache $CACHE_DIR
+
+        announce "Compiling $bpd"
+        compile $bpd
+
+        announce "Storing built $bpd"
+        copy-dir $APP_DIR $TMP_DIR/$bpd/app
+        copy-dir $BUILD_DIR $TMP_DIR/$bpd/build
+        copy-dir $CACHE_DIR $TMP_DIR/$bpd/cache
+    done
+
+    announce "Cleaning app dir"
+    rm -rf $APP_DIR
+    mkdir -p $APP_DIR
+
+    for bpu in $BUILDPACK_URLS; do
+        bpd=$(url-dir $bpu)
+
+        if [[ -d $TMP_DIR/$bpd/app ]]; then
+            announce "Restoring app dir for $bpd"
+            cp -a $TMP_DIR/$bpd/app/. $APP_DIR
+        fi
+    done
+}
+
+detect() {
+    declare bpd=$1
+    d=$($TMP_DIR/$bpd/buildpack/bin/detect $BUILD_DIR)
+    [[ $? == 0 && -n $d ]]
+}
+
+compile() {
+    $TMP_DIR/$1/buildpack/bin/compile $BUILD_DIR $CACHE_DIR $ENV_DIR || exit
+}
+
+copy-dir() {
+    [[ -n $3 ]] || rm -rf $2
+    mkdir -p $(dirname $2) || exit
+    cp -a $1 $2 || exit
+}
+
+clone() {
+    declare bpu=$1 bpd=$2
+    announce Cloning $bpu
+    mkdir -p $TMP_DIR/$bpd/buildpack
+    git clone --depth=1 $bpu $TMP_DIR/$bpd/buildpack || exit
+    rm -rf $TMP_DIR/$bpd/buildpack/.git
+}
+
+url-dir() {
+    echo ${1#*//*/}  # e.g. heroku/heroku-buildpack-ruby
+}
+
+announce() {
+    echo "======> $*" >&2
+}
+
+[[ ${0##*/} != compile ]] || main "$@"

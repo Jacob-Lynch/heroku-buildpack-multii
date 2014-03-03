@@ -1,27 +1,19 @@
 #!/usr/bin/env bash
 
-APP_DIR=/app
-BUILD_DIR=$1
-CACHE_DIR=$2
-DANGER_DIR=foo
-ENV_DIR=$3
-
-export BUILD_DIR CACHE_DIR ENV_DIR
-env
-exit 1
-
-BUILDPACK_URLS=$(<.buildpacks)
-
 set -eo pipefail
 shopt -s extglob dotglob nocasematch
 
+APP_DIR=/app
+BUILD_DIR=$1    # /tmp/build_76471de2-7dff-46b7-b331-c8dd07653def
+CACHE_DIR=$2    # /app/tmp/cache
+DANGER_DIR=$(mktemp -d /tmp/danger.XXXXXX)
+ENV_DIR=$3
+
+BUILDPACK_URLS=$(<.buildpacks)
+
 main() {
     declare bpu bp branch detected released
-    declare bp_dir build_dir cache_dir pristine_dir
-    declare bp_released
-
-    announce "Juggling pristine sources"
-    juggle-into $BUILD_DIR ${pristine_dir:=$BUILD_DIR/pristine}
+    declare bp_dir cache_dir bp_released
 
     for bpu in $BUILDPACK_URLS; do
         set-vars
@@ -38,11 +30,8 @@ main() {
     for bpu in $BUILDPACK_URLS; do
         set-vars
 
-        announce "Copying pristine sources for $bp"
-        cp -al $pristine_dir $build_dir
-
         announce "Running $bp/bin/detect"
-        detected=$($bp_dir/bin/detect $build_dir)
+        detected=$($bp_dir/bin/detect $BUILD_DIR)
         if [[ $? != 0 || -z $detected ]]; then
             announce "... NO${detected:+: $detected}"
             continue
@@ -50,39 +39,22 @@ main() {
         announce "... YES: $detected"
 
         announce "Running $bp/bin/compile"
-        kill-dir $APP_DIR
         mkdir -p $cache_dir
-        $bp_dir/bin/compile $build_dir $cache_dir $ENV_DIR
+        $bp_dir/bin/compile $BUILD_DIR $cache_dir $ENV_DIR
 
         announce "Running $bp/bin/release"
         if [[ -x $bp_dir/bin/release ]]; then
-            released=$($bp_dir/bin/release $build_dir)
+            released=$($bp_dir/bin/release $BUILD_DIR)
             if [[ -n $released ]]; then
-                echo "$released" > $BUILD_DIR/last_pack_release.out
+                echo "$released" > /tmp/last_pack_release.out
                 bp_released=$bp
             fi
         fi
-
-        if ls $APP_DIR/* &>/dev/null; then
-            announce "Preserving content of $APP_DIR"
-            kill-dir $build_dir
-            copy-dir $APP_DIR $build_dir
-        fi
-    done
-
-    announce "Cleaning $APP_DIR"
-    kill-dir $APP_DIR
-
-    for bpu in $BUILDPACK_URLS; do
-        set-vars
-
-        announce "Installing $bp"
-        copy-dir $build_dir $APP_DIR keep
     done
 
     if [[ -n $bp_released ]]; then
         announce "Using release configuration from $bp_released"
-        cat $BUILD_DIR/last_pack_release.out | indent
+        cat /tmp/last_pack_release.out | indent
     fi
 }
 
@@ -94,26 +66,8 @@ set-vars() {
         branch=
     fi
     bp=${bpu#*//*/}
-    bp_dir=$BUILD_DIR/$bp/buildpack
-    build_dir=$BUILD_DIR/$bp/build
+    bp_dir=$DANGER_DIR/$bp
     cache_dir=$CACHE_DIR/$bp
-}
-
-juggle-into() {
-    declare tmp
-    tmp=$(mktemp -d $2.XXXXXX)
-    mv $1/!(${tmp##*/}) $tmp
-    mv $tmp $2
-}
-
-copy-dir() {
-    [[ $3 == keep ]] || kill-dir $2
-    mkdir -p $2
-    [[ ! -d $1 ]] || cp -a $1/. $2 || exit
-}
-
-kill-dir() {
-    rm -rf $1 2>/dev/null || rm -rf $1/* $1/.[!.]*
 }
 
 announce() {
@@ -130,4 +84,4 @@ else
     sed() { command sed -u "$@"; }
 fi
 
-[[ ${0##*/} != compile ]] || main "$@"
+[[ "$0" != "$BASH_SOURCE" ]] || main "$@"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-if [[ -s $BUILD_DIR/last_pack_release.out ]]; then
-    cat $BUILD_DIR/last_pack_release.out
+if [[ -s /tmp/last_pack_release.out ]]; then
+    cat /tmp/last_pack_release.out
 else
     echo "--- {}"
 fi

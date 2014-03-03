@@ -15,12 +15,12 @@ barged ahead.
 What's different?
 -----------------
 
-The original heroku-buildpack-multi is designed to build from a set of
-cooperative buildpacks, then finish with a terminal buildpack that
-completes the installation in /app.  This buildpack attempts to make
-apparent terminal buildpacks cooperate, for example to combine ...
+Frankly not much is different. I thought there would be more, but as
+I learned how the directories (build, cache, env) are set up, this has
+gradually converged with the original heroku-buildpack-multi.
 
-* Each buildpack gets its own BUILD_DIR and CACHE_DIR.
-* Buildpacks that install to APP_DIR are merged.
-* Doesn't throw away compile-time error messages from git, tar, etc.
+Here are the remaining primary differences:
+
+* Each buildpack gets its own CACHE_DIR.
+* Error messages from git etc. are displayed rather than stifled.
 * Doesn't work with tarballs yet, only git repos.

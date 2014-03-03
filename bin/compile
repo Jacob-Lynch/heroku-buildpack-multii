@@ -9,7 +9,7 @@ CACHE_DIR=$2    # /app/tmp/cache
 DANGER_DIR=$(mktemp -d /tmp/danger.XXXXXX)
 ENV_DIR=$3
 
-BUILDPACK_URLS=$(<.buildpacks)
+BUILDPACK_URLS=$(<$BUILD_DIR/.buildpacks)
 
 main() {
     declare bpu bp branch detected released

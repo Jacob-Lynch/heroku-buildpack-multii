@@ -1,82 +1,105 @@
 #!/usr/bin/env bash
 
+APP_DIR=/app
 BUILD_DIR=$1
 CACHE_DIR=$2
+DANGER_DIR=foo
 ENV_DIR=$3
-APP_DIR=/app
-TMP_DIR=/tmp/multi
 
-if [[ -z $BUILDPACK_URLS ]]; then
-    BUILDPACK_URLS="
-    https://github.com/heroku/heroku-buildpack-ruby
-    https://github.com/heroku/heroku-buildpack-nodejs
-    https://github.com/heroku/heroku-buildpack-clojure
-    https://github.com/heroku/heroku-buildpack-python
-    "
-fi
+BUILDPACK_URLS=$(<.buildpacks)
+
+set -eo pipefail
+shopt -s extglob dotglob nocasematch
 
 main() {
-    declare bpd
+    declare bpu bp branch detected released
+    declare bp_dir build_dir cache_dir pristine_dir
+    declare bp_released
 
-    announce "Saving pristine dirs"
-    copy-dir $APP_DIR $TMP_DIR/pristine/app
-    copy-dir $BUILD_DIR $TMP_DIR/pristine/build
-    copy-dir $CACHE_DIR $TMP_DIR/pristine/cache
+    announce "Juggling pristine sources"
+    juggle-into $BUILD_DIR ${pristine_dir:=$BUILD_DIR/pristine}
 
     for bpu in $BUILDPACK_URLS; do
-        bpd=$(url-dir $bpu)
+        set-vars
 
         announce "Cloning $bpu"
-        clone $bpu $bpd
+        git clone --depth=1 $bpu $bp_dir 2>&1 | indent
+        if [[ -n $branch ]]; then
+            announce "Checking out branch $branch"
+            (cd $bp_dir && git checkout $branch 2>&1 | indent)
+        fi
+        rm -rf $bp_dir/.git
     done
 
     for bpu in $BUILDPACK_URLS; do
-        bpd=$(url-dir $bpu)
+        set-vars
 
-        announce "Detecting $bpd"
-        if ! detect $bpd; then
-            announce "... NO"
+        announce "Copying pristine sources for $bp"
+        cp -al $pristine_dir $build_dir
+
+        announce "Running $bp/bin/detect"
+        detected=$($bp_dir/bin/detect $build_dir)
+        if [[ $? != 0 || -z $detected ]]; then
+            announce "... NO${detected:+: $detected}"
             continue
         fi
+        announce "... YES: $detected"
 
-        announce "... YES"
-        announce "Restoring pristine dirs"
-        copy-dir $TMP_DIR/pristine/app $APP_DIR
-        copy-dir $TMP_DIR/pristine/build $BUILD_DIR
+        announce "Running $bp/bin/compile"
+        kill-dir $APP_DIR
+        mkdir -p $cache_dir
+        $bp_dir/bin/compile $build_dir $cache_dir $ENV_DIR
 
-        announce "Restoring cache for $bpd"
-        copy-dir $TMP_DIR/$bpd/cache $CACHE_DIR
+        announce "Running $bp/bin/release"
+        if [[ -x $bp_dir/bin/release ]]; then
+            released=$($bp_dir/bin/release $build_dir)
+            if [[ -n $released ]]; then
+                echo "$released" > $BUILD_DIR/last_pack_release.out
+                bp_released=$bp
+            fi
+        fi
 
-        announce "Compiling $bpd"
-        compile $bpd
-
-        announce "Storing built $bpd"
-        copy-dir $APP_DIR $TMP_DIR/$bpd/app
-        copy-dir $BUILD_DIR $TMP_DIR/$bpd/build
-        copy-dir $CACHE_DIR $TMP_DIR/$bpd/cache
+        if ls $APP_DIR/* &>/dev/null; then
+            announce "Preserving content of $APP_DIR"
+            kill-dir $build_dir
+            copy-dir $APP_DIR $build_dir
+        fi
     done
 
-    announce "Cleaning app dir"
+    announce "Cleaning $APP_DIR"
     kill-dir $APP_DIR
 
     for bpu in $BUILDPACK_URLS; do
-        bpd=$(url-dir $bpu)
+        set-vars
 
-        if [[ -d $TMP_DIR/$bpd/app ]]; then
-            announce "Restoring app dir for $bpd"
-            copy-dir $TMP_DIR/$bpd/app $APP_DIR keep
-        fi
+        announce "Installing $bp"
+        copy-dir $build_dir $APP_DIR keep
     done
+
+    if [[ -n $bp_released ]]; then
+        announce "Using release configuration from $bp_released"
+        cat $BUILD_DIR/last_pack_release.out | indent
+    fi
 }
 
-detect() {
-    declare bpd=$1
-    d=$($TMP_DIR/$bpd/buildpack/bin/detect $BUILD_DIR)
-    [[ $? == 0 && -n $d ]]
+set-vars() {
+    if [[ $bpu == *'#'* ]]; then
+        branch=${bpu##*#}
+        bpu=${bpu%#*}
+    else
+        branch=
+    fi
+    bp=${bpu#*//*/}
+    bp_dir=$BUILD_DIR/$bp/buildpack
+    build_dir=$BUILD_DIR/$bp/build
+    cache_dir=$CACHE_DIR/$bp
 }
 
-compile() {
-    $TMP_DIR/$1/buildpack/bin/compile $BUILD_DIR $CACHE_DIR $ENV_DIR || exit
+juggle-into() {
+    declare tmp
+    tmp=$(mktemp -d $2.XXXXXX)
+    mv $1/!(${tmp##*/}) $tmp
+    mv $tmp $2
 }
 
 copy-dir() {
@@ -89,19 +112,18 @@ kill-dir() {
     rm -rf $1 2>/dev/null || rm -rf $1/* $1/.[!.]*
 }
 
-clone() {
-    declare bpu=$1 bpd=$2
-    mkdir -p $TMP_DIR/$bpd
-    git clone --depth=1 $bpu $TMP_DIR/$bpd/buildpack || exit
-    rm -rf $TMP_DIR/$bpd/buildpack/.git
-}
-
-url-dir() {
-    echo ${1#*//*/}  # e.g. heroku/heroku-buildpack-ruby
-}
-
 announce() {
     echo "=====> $*" >&2
 }
+
+indent() {
+    sed 's/^/       /'
+}
+
+if [ $(uname) == Darwin ]; then
+    sed() { command sed -l "$@"; }
+else
+    sed() { command sed -u "$@"; }
+fi
 
 [[ ${0##*/} != compile ]] || main "$@"

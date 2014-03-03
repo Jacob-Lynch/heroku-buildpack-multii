@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 
+echo Multii; exit 0
 [[ -s $1/.buildpacks ]] && echo "Multii"

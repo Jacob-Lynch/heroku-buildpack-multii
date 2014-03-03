@@ -1,5 +1,5 @@
-Heroku buildpack: Multi
-=======================
+Heroku buildpack: Multii
+========================
 
 I thought, "It would be neat to have a... composable!... buildpack for
 Heroku." So I built this. I called my creation heroku-buildpack-multi.

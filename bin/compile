@@ -6,6 +6,10 @@ CACHE_DIR=$2
 DANGER_DIR=foo
 ENV_DIR=$3
 
+export BUILD_DIR CACHE_DIR ENV_DIR
+env
+exit 1
+
 BUILDPACK_URLS=$(<.buildpacks)
 
 set -eo pipefail

@@ -31,7 +31,7 @@ main() {
         set-vars
 
         announce "Running $bp/bin/detect"
-        detected=$($bp_dir/bin/detect $BUILD_DIR)
+        detected=$(cd $bp_dir && bin/detect $BUILD_DIR)
         if [[ $? != 0 || -z $detected ]]; then
             announce "... NO${detected:+: $detected}"
             continue
@@ -40,11 +40,11 @@ main() {
 
         announce "Running $bp/bin/compile"
         mkdir -p $cache_dir
-        $bp_dir/bin/compile $BUILD_DIR $cache_dir $ENV_DIR
+        (cd $bp_dir && bin/compile $BUILD_DIR $cache_dir $ENV_DIR)
 
         announce "Running $bp/bin/release"
         if [[ -x $bp_dir/bin/release ]]; then
-            released=$($bp_dir/bin/release $BUILD_DIR)
+            released=$(cd $bp_dir && bin/release $BUILD_DIR)
             if [[ -n $released ]]; then
                 echo "$released" > /tmp/last_pack_release.out
                 bp_released=$bp
